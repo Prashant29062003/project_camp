@@ -1,6 +1,7 @@
 import mongoose, {mongo, Schema} from "mongoose";
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 
 const userSchema = new Schema(
     {
@@ -113,4 +114,4 @@ userSchema.methods.generateTemporaryToken = function(){
     return {unHashedToken, hashedToken, tokenExpiry}
 }
 
-export const user = mongoose.model("User", userSchema)
+export const User = mongoose.model("User", userSchema)

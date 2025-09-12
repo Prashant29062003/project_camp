@@ -11,7 +11,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
     const refreshToken = user.generateRefreshtoken();
 
     user.refreshToken = refreshToken;
-    await user.save({ ValidateBeforeSave: fasle });
+    await user.save({ ValidateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
     throw new ApiError(
@@ -45,14 +45,14 @@ const registerUser = asyncHandler(async (req, res) => {
   user.emailVerificationToken = hashedToken;
   user.emailVerificationExpiry = tokenExpiry;
 
-  await user.save({ velidateBeforeSave: fasle });
+  await user.save({ validateBeforeSave: false });
 
   await sendEmail({
-    email: user?.emial,
-    subject: "Please verfiy you email",
+    email: user?.email,
+    subject: "Please verify your email",
     mailgenContent: emailVerificationMailgenContent(
       user.username,
-      `${req.protocol}://${req.get("host")}/api/v1/users/verfy-email/${unHashedToken}`,
+      `${req.protocol}://${req.get("host")}/api/v1/users/verify-email/${unHashedToken}`,
     ),
   });
 
