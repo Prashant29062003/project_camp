@@ -4,6 +4,7 @@ import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from "../utils/api-error.js";
 import { emailVerificationMailgenContent, forgotPasswordMailgenContent, sendEmail } from "../utils/mail.js";
 import jwt from "jsonwebtoken";
+import * as crypto from "crypto";
 import { cookie } from "express-validator";
 
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -12,8 +13,8 @@ const generateAccessAndRefreshTokens = async (userId) => {
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshtoken();
 
-    user.refreshToken = refreshToken;
-    await user.save({ ValidateBeforeSave: false });
+  user.refreshToken = refreshToken;
+  await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
     throw new ApiError(
@@ -59,7 +60,7 @@ const registerUser = asyncHandler(async (req, res) => {
   });
 
   //   if we don't want just use this using '-' and furhter any property or method
-  const createUser = await User.findById(User._id).select(
+  const createUser = await User.findById(user._id).select(
     "-password -refreshToken -emailVerificationToken -emailVerificationExpiry",
   );
 
@@ -81,8 +82,8 @@ const registerUser = asyncHandler(async (req, res) => {
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email && !password) {
-    throw new ApiError(400, "Username or email is required.");
+  if (!email || !password) {
+    throw new ApiError(400, "Email and password are required.");
   }
 
   await User.findOne({ email });
@@ -93,7 +94,7 @@ const login = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
 
   if (!user) {
-    throw new ApiError(400, "User does not exists.");
+    throw new ApiError(400, "User does not exist.");
   }
 
   const isPasswordValid = await user.isPasswordCorrect(password);
@@ -111,7 +112,7 @@ const login = asyncHandler(async (req, res) => {
   );
 
   if (!loggedInUser) {
-    throw new ApiError(500, "Something went wrong while registering a user.");
+    throw new ApiError(500, "Something went wrong while logging in.");
   }
 
   const options = {
@@ -131,11 +132,11 @@ const login = asyncHandler(async (req, res) => {
           accessToken,
           refreshToken,
         },
-        "User Loggin successfully.",
+        "User logged in successfully.",
       ),
     );
 });
-const logout = asyncHandler(async (req, res) => {
+const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
     {
@@ -148,7 +149,7 @@ const logout = asyncHandler(async (req, res) => {
     },
   );
   const options = {
-    httpOny: true,
+    httpOnly: true,
     secure: true,
   };
   return res
@@ -220,13 +221,14 @@ const resendEmailVerification = asyncHandler (async (req,res)=> {
   user.emailVerificationExpiry = tokenExpiry;
 
   await user.save({verificationBeforeSave: fasle});
+  await user.save({ validateBeforeSave: false });
 
   await sendEmail({
     email: user?.email,
     subject: "Please verify you email",
     mailgenContent: emailVerificationMailgenContent(
       user.username,
-      `${req.protocol}: ${req.get("host")}/api/v1/users/verify-emial${unHashedToken}`
+      `${req.protocol}://${req.get("host")}/api/v1/users/verify-email/${unHashedToken}`
     )
   });
 
@@ -242,24 +244,26 @@ const resendEmailVerification = asyncHandler (async (req,res)=> {
 
 })
 
-const refreshAccessToken = asyncHandler (async (req, res) => {
-  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken || req.body.refreshToken
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
   if(!incomingRefreshToken){
     throw new ApiError(401, "Unauthorized access")
   }
 
   try {
-    JsonWebTokenError.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
 
-    const user = await User.User.findById(deodedToken?._id);
+    const user = await User.User.findById(decodedToken?._id);
     if(!user){
       throw new ApiError(401, "Invalid refresh token");
     }
     
-    if(incomingRefreshToken != user?.refreshToken){
+    if(incomingRefreshToken !== user?.refreshToken){
       throw new ApiError(401, "Refresh token is expired.");
     }
+
+
     const options = {
       httpOnly: true,
       secure: true
@@ -271,21 +275,21 @@ const refreshAccessToken = asyncHandler (async (req, res) => {
 
     await user.save()
 
-    return res 
+    return res
       .status(200)
-      .cookie("accesstoken", accessToken, options)
-      .cookie("regreshtoken", newRefreshToken,)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
       .json(
         new ApiResponse(
           200,
           {accessToken, refreshToken: newRefreshToken} ,
-          "Access eoken refreshed"
+          "Access token refreshed"
         )
       )
   } catch (error) {
-      throw new ApiError(401, "Inavlid refresh token.");
+      throw new ApiError(401, "Invalid refresh token.");
   }
-})
+});
 
 const forgotPasswordRequest = asyncHandler (async (req, res)=> {
   const user = await User.findOne({email});
@@ -379,7 +383,7 @@ const changeCurrntPassword = asyncHandler(async (req,res) => {
 })
 export { registerUser,
    login,
-   logout,
+   logoutUser,
    getCurrentUser,
    verifyEmail, 
    resendEmailVerification,
